@@ -24,8 +24,11 @@ class Gpx::TrackImporter
     tracks = json['gpx']['trk']
     tracks_arr = tracks.is_a?(Array) ? tracks : [tracks]
 
-    points = tracks_arr.map { parse_track(_1) }.flatten.compact
-    points_data = points.map { prepare_point(_1) }.compact
+    segment_buckets = tracks_arr.each_with_index.flat_map { |track, idx| parse_track(track, idx) }.compact
+
+    points_data = segment_buckets.flat_map do |bucket|
+      bucket[:points].map { |pt| prepare_point(pt, bucket[:tracker_id]) }.compact
+    end
 
     points_data.each_slice(BATCH_SIZE) do |batch|
       inserted = bulk_insert_points(batch)
@@ -35,16 +38,24 @@ class Gpx::TrackImporter
 
   private
 
-  def parse_track(track)
-    return if track['trkseg'].blank?
+  def parse_track(track, track_index)
+    return [] if track['trkseg'].blank?
 
     segments = track['trkseg']
     segments_array = segments.is_a?(Array) ? segments : [segments]
 
-    segments_array.compact.map { |segment| segment['trkpt'] }
+    segments_array.compact.each_with_index.map do |segment, seg_index|
+      points = segment['trkpt']
+      points = [points] unless points.is_a?(Array)
+
+      {
+        tracker_id: "import-#{import.id}-trk-#{track_index}-seg-#{seg_index}",
+        points: points.compact
+      }
+    end
   end
 
-  def prepare_point(point)
+  def prepare_point(point, tracker_id)
     return if point['lat'].blank? || point['lon'].blank? || point['time'].blank?
 
     elevation = point['ele'].to_f
@@ -56,6 +67,7 @@ class Gpx::TrackImporter
       altitude: elevation,
       altitude_decimal: elevation,
       timestamp: Time.zone.parse(point['time']).utc.to_i,
+      tracker_id: tracker_id,
       import_id: import.id,
       velocity: speed(point),
       raw_data: point,
