@@ -57,6 +57,7 @@ class ReverseGeocoding::Places::FetchData
     coordinates = place_data['geometry']['coordinates']
 
     Place.new(
+      user_id: place.user_id,
       lonlat: build_point_coordinates(coordinates),
       latitude: coordinates[1].to_f.round(5),
       longitude: coordinates[0].to_f.round(5)
@@ -80,7 +81,7 @@ class ReverseGeocoding::Places::FetchData
 
   def find_existing_places(osm_ids)
     Place.where("geodata->'properties'->>'osm_id' IN (?)", osm_ids)
-         .global
+         .where(user_id: place.user_id)
          .index_by { |p| p.geodata.dig('properties', 'osm_id').to_s }
          .compact
   end
@@ -121,16 +122,17 @@ class ReverseGeocoding::Places::FetchData
 
   def save_places(places_to_create, places_to_update)
     if places_to_create.any?
-      place_attributes = places_to_create.uniq { |p| p.geodata&.dig('properties', 'osm_id') }.map do |place|
+      place_attributes = places_to_create.uniq { |p| p.geodata&.dig('properties', 'osm_id') }.map do |sibling|
         {
-          name: place.name,
-          latitude: place.latitude,
-          longitude: place.longitude,
-          lonlat: place.lonlat,
-          city: place.city,
-          country: place.country,
-          geodata: place.geodata,
-          source: place.source,
+          user_id: sibling.user_id,
+          name: sibling.name,
+          latitude: sibling.latitude,
+          longitude: sibling.longitude,
+          lonlat: sibling.lonlat,
+          city: sibling.city,
+          country: sibling.country,
+          geodata: sibling.geodata,
+          source: sibling.source,
           created_at: Time.current,
           updated_at: Time.current
         }
@@ -140,17 +142,18 @@ class ReverseGeocoding::Places::FetchData
 
     return unless places_to_update.any?
 
-    update_attributes = places_to_update.uniq(&:id).map do |place|
+    update_attributes = places_to_update.uniq(&:id).map do |existing|
       {
-        id: place.id,
-        name: place.name,
-        latitude: place.latitude,
-        longitude: place.longitude,
-        lonlat: place.lonlat,
-        city: place.city,
-        country: place.country,
-        geodata: place.geodata,
-        source: place.source,
+        id: existing.id,
+        user_id: existing.user_id,
+        name: existing.name,
+        latitude: existing.latitude,
+        longitude: existing.longitude,
+        lonlat: existing.lonlat,
+        city: existing.city,
+        country: existing.country,
+        geodata: existing.geodata,
+        source: existing.source,
         updated_at: Time.current
       }
     end

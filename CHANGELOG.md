@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Places are now strictly per-user. Suggestion, photo-geotagging, and reverse-geocoding all use your own place catalogue exclusively; no places are shared across users. Existing shared places have been backfilled to their most-active owner. Self-hosted single-user instances see no behaviour change.
+- Internal: `places.user_id` is now NOT NULL at the database level, completing the per-user ownership migration. No user-visible effect.
+
 ### Fixed
 
 - The slider knob inside settings and map-layer toggles now slides over to the new position when clicked, instead of staying on the left while only the track colour changes. (#2566)

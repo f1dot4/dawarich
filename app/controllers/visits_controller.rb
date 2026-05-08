@@ -45,12 +45,8 @@ class VisitsController < ApplicationController
     params_to_update.delete(:name) if params_to_update[:name].is_a?(String) && params_to_update[:name].strip.empty?
 
     # Cross-tenant IDOR guard: place_id must belong to current_user.
-    # Suggested places (visit.suggested_places) are also acceptable since
-    # they're already user-scoped via the visit relationship.
-    if params_to_update[:place_id].present?
-      allowed_place_ids = current_user.places.where(id: params_to_update[:place_id]).pluck(:id) +
-                          @visit.suggested_places.where(id: params_to_update[:place_id]).pluck(:id)
-      return render_unprocessable('Invalid place') unless allowed_place_ids.include?(params_to_update[:place_id].to_i)
+    if params_to_update[:place_id].present? && !current_user.places.exists?(id: params_to_update[:place_id])
+      return render_unprocessable('Invalid place')
     end
 
     # Capture both old and new month so cache busts cover edits that move
@@ -243,13 +239,8 @@ class VisitsController < ApplicationController
                 .count
   end
 
-  # Look up the place across both user-owned places AND the visit's
-  # suggested_places. Suggested places may have a NULL user_id (the
-  # `Place.user_id` column is optional, populated for user-created
-  # places only) and would otherwise miss `current_user.places`.
   def update_visit_name_from_place(place_id)
-    place = current_user.places.find_by(id: place_id) ||
-            @visit.suggested_places.find_by(id: place_id)
+    place = current_user.places.find_by(id: place_id)
     @visit.name = place.name if place && place.name.present?
   end
 
